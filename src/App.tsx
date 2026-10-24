@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   TrendingUp, TrendingDown, Activity, Clock, Shield, 
   BarChart3, PieChart, Settings, Bell, Search,
@@ -110,6 +110,123 @@ const PAIRS = [
   { id: 'USDJPY', name: 'USD / JPY', base: 151.250, precision: 3, pipIndex: 1 },
   { id: 'BTCUSD', name: 'Bitcoin / USD', base: 65420.00, precision: 2, pipIndex: 1 },
 ];
+
+type Pair = (typeof PAIRS)[number];
+type AppView = 'dashboard' | 'markets' | 'education';
+
+const EDUCATION_TOPICS = [
+  {
+    term: 'Order Block (OB)',
+    detail: 'Zona candle terakhir sebelum pergerakan impulsif. Dipakai sebagai area entry saat harga kembali menguji zona tersebut.',
+  },
+  {
+    term: 'Fair Value Gap (FVG)',
+    detail: 'Celah likuiditas yang terbentuk dari tiga candle berurutan. Harga cenderung kembali mengisi celah ini sebelum melanjutkan tren.',
+  },
+  {
+    term: 'Break of Structure (BOS)',
+    detail: 'Penembusan swing high/low terakhir yang mengonfirmasi tren berlanjut pada timeframe yang diamati.',
+  },
+  {
+    term: 'Change of Character (CHoCH)',
+    detail: 'Sinyal awal pembalikan arah, terjadi saat struktur pasar gagal mempertahankan urutan swing-nya.',
+  },
+  {
+    term: 'Killzone',
+    detail: 'Jendela waktu sesi (Asia, London, New York) dengan likuiditas tertinggi sehingga peluang sweep lebih besar.',
+  },
+  {
+    term: 'ATR (Average True Range)',
+    detail: 'Ukuran volatilitas rata-rata. Dipakai untuk menyesuaikan jarak stop loss terhadap kondisi pasar saat ini.',
+  },
+];
+
+const MarketsView = ({ selectedPair, onSelect }: { selectedPair: Pair; onSelect: (pair: Pair) => void }) => {
+  const rows = useMemo(
+    () =>
+      PAIRS.map((pair) => {
+        const series = generateMockData(pair.base, 50, pair.precision);
+        const first = series[0].close;
+        const last = series[series.length - 1].close;
+        const volume = series.reduce((sum, candle) => sum + candle.volume, 0);
+        return { pair, last, change: ((last - first) / first) * 100, volume };
+      }),
+    []
+  );
+
+  return (
+    <div className="lg:col-span-12 space-y-6">
+      <section className="glass-panel p-6 space-y-2">
+        <h3 className="text-2xl font-bold text-white">Markets</h3>
+        <p className="text-sm text-gray-400">
+          Ringkasan seluruh instrumen yang tersedia. Pilih salah satu untuk membuka analisisnya di Dashboard.
+        </p>
+      </section>
+
+      <section className="glass-panel p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {rows.map(({ pair, last, change, volume }) => {
+            const isUp = change >= 0;
+            const isActive = selectedPair.id === pair.id;
+
+            return (
+              <button
+                key={pair.id}
+                onClick={() => onSelect(pair)}
+                className={cn(
+                  "text-left p-5 rounded-xl border transition-all space-y-4",
+                  isActive
+                    ? "bg-indigo-600/20 border-indigo-500/50"
+                    : "bg-white/5 border-white/10 hover:bg-white/10"
+                )}
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="font-bold text-white">{pair.id}</div>
+                    <div className="text-xs text-gray-400">{pair.name}</div>
+                  </div>
+                  <span className={cn("text-xs font-bold flex items-center gap-1", isUp ? "text-green-400" : "text-red-400")}>
+                    {isUp ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+                    {isUp ? '+' : ''}{change.toFixed(2)}%
+                  </span>
+                </div>
+
+                <MT5Price price={last} precision={pair.precision} pipIndex={pair.pipIndex} className="text-2xl text-white" />
+
+                <div className="flex items-center justify-between text-[10px] uppercase tracking-widest text-gray-500">
+                  <span>Volume {volume.toLocaleString('en-US')}</span>
+                  <span>{isActive ? 'Sedang Dipilih' : 'Buka Analisis'}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+    </div>
+  );
+};
+
+const EducationView = () => (
+  <div className="lg:col-span-12 space-y-6">
+    <section className="glass-panel p-6 space-y-2">
+      <h3 className="text-2xl font-bold text-white">Education</h3>
+      <p className="text-sm text-gray-400">
+        Dasar-dasar ICT &amp; Smart Money Concepts yang dipakai mesin analisis AuraTrade.
+      </p>
+    </section>
+
+    <section className="glass-panel p-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {EDUCATION_TOPICS.map((topic) => (
+          <article key={topic.term} className="p-5 bg-white/5 rounded-xl border border-white/10 space-y-2">
+            <h4 className="text-sm font-bold text-indigo-300">{topic.term}</h4>
+            <p className="text-xs text-gray-400 leading-relaxed">{topic.detail}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  </div>
+);
 
 // --- Components ---
 const StopLossCalculator = ({ atr, currentPrice, precision }: { atr: number; currentPrice: number; precision: number }) => {
@@ -271,6 +388,7 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
+  const [view, setView] = useState<AppView>('dashboard');
 
   useEffect(() => {
     setMarketData(generateMockData(selectedPair.base, 50, selectedPair.precision));
@@ -437,9 +555,22 @@ export default function App() {
 
         <div className="flex items-center gap-6">
           <div className="hidden md:flex items-center gap-4 text-sm font-medium text-gray-400">
-            <button className="hover:text-white transition-colors">Dashboard</button>
-            <button className="hover:text-white transition-colors">Markets</button>
-            <button className="hover:text-white transition-colors">Education</button>
+            {([
+              { id: 'dashboard', label: 'Dashboard' },
+              { id: 'markets', label: 'Markets' },
+              { id: 'education', label: 'Education' },
+            ] as { id: AppView; label: string }[]).map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setView(item.id)}
+                className={cn(
+                  "transition-colors",
+                  view === item.id ? "text-white" : "hover:text-white"
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
           <div className="flex items-center gap-3">
             <button className="p-2 hover:bg-white/5 rounded-full transition-colors text-gray-400">
@@ -451,7 +582,19 @@ export default function App() {
       </header>
 
       <main className="flex-1 p-6 max-w-[1600px] mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
+        {view === 'markets' ? (
+          <MarketsView
+            selectedPair={selectedPair}
+            onSelect={(pair) => {
+              setSelectedPair(pair);
+              setView('dashboard');
+            }}
+          />
+        ) : view === 'education' ? (
+          <EducationView />
+        ) : (
+          <>
+                
         {/* Left Sidebar: Controls */}
         <aside className="lg:col-span-3 space-y-6">
           <section className="glass-panel p-5 space-y-4">
@@ -840,6 +983,8 @@ export default function App() {
             </div>
           </section>
         </aside>
+          </>
+        )}
       </main>
 
       {/* Footer Status Bar */}
