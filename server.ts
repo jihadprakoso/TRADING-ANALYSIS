@@ -5,6 +5,10 @@ import { fileURLToPath } from "url";
 import { WebSocketServer, WebSocket } from "ws";
 import https from "https";
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import dotenv from "dotenv";
+
+// Muat kredensial dari .env.local (utama) lalu .env sebagai fallback
+dotenv.config({ path: [".env.local", ".env"] });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
